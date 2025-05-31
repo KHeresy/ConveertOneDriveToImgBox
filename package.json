@@ -2,6 +2,7 @@
   "dependencies": {
     "cheerio": "^1.0.0",
     "imgbox-js": "^1.0.35",
+    "minimist": "^1.2.8",
     "puppeteer": "^24.9.0"
   }
 }

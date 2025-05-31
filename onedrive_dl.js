@@ -41,7 +41,10 @@ async function runDownloadSession(url, downloadPath, timeoutMs) {
 
     await browser.close();
 
-    if (!downloaded) throw new Error(`❌ 等待逾時，未找到檔案：${filePath}`);
+    if (!downloaded) {
+        console.log(`❌ 等待逾時，未找到檔案：${filePath}`);
+        throw new Error(`❌ 等待逾時，未找到檔案：${filePath}`);
+    }
     return filePath;
 }
 
