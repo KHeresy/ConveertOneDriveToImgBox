@@ -45,6 +45,7 @@ async function runDownloadSession(url, downloadPath, timeoutMs) {
         console.log(`❌ 等待逾時，未找到檔案：${filePath}`);
         throw new Error(`❌ 等待逾時，未找到檔案：${filePath}`);
     }
+    await new Promise(resolve => setTimeout(resolve, 500));
     return filePath;
 }
 
