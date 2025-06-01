@@ -30,11 +30,20 @@ async function runDownloadSession(url, downloadPath, timeoutMs) {
 
     console.log(`🚀 嘗試下載：${url}`);
     await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
-
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    const filename = await page.$eval('button[role="text"]', btn => btn.getAttribute('title'));
-    await page.click('button[data-automationid="download"]');
+    let filename = "";
+    if (url.startsWith('https://1drv.ms/u/s!')) {
+        filename = await page.$eval('button[role="text"]', btn => btn.getAttribute('title'));
+        await page.click('button[data-automationid="download"]');
+    }
+    else if (url.startsWith('https://1drv.ms/i/s!')) {
+        const title = await page.title();
+        filename = title.split(" - ")[0];
+        const button = await page.$('#__photo-view-download');
+        await button.click();
+    }
+
 
     const filePath = path.join(downloadPath, filename);
     const downloaded = await waitFileExists(filePath, timeoutMs);

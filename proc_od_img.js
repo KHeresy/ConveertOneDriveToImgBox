@@ -46,7 +46,7 @@ $('a').each((_, el) => {
     const src = img.attr('src') || '';
     if (
         href &&
-        href.startsWith('https://1drv.ms/u/s!') &&
+        href.startsWith('https://1drv.ms/') &&
         img.length > 0 &&
         !src.includes('imgbox.com')
     ) {
