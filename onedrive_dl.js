@@ -37,13 +37,15 @@ async function runDownloadSession(url, downloadPath, timeoutMs) {
         filename = await page.$eval('button[role="text"]', btn => btn.getAttribute('title'));
         await page.click('button[data-automationid="download"]');
     }
-    else if (url.startsWith('https://1drv.ms/i/s!')) {
+    else if (url.startsWith('https://1drv.ms/i/')) {
         const title = await page.title();
         filename = title.split(" - ")[0];
         const button = await page.$('#__photo-view-download');
         await button.click();
     }
 
+    if (filename == "")
+        throw new Error(`❌ 找不到檔案名稱`);
 
     const filePath = path.join(downloadPath, filename);
     const downloaded = await waitFileExists(filePath, timeoutMs);
