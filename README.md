@@ -14,7 +14,17 @@ OneDrive 在 2023 年把內嵌圖片的連結改成比較像是 API 的形式（
 
 ## 程式流程
 
-主程式是 `proc_od_img.js`，基本執行的方法是： 
+主程式是 `proc_od_img.js`，基本執行的方法是：
+
+先將環境變數 `IMGBOX_COOKIE` 設定為 imgbox 的 cookie、作為登入的方式。這邊取得 cookei  F12 工具，細節請參考 `imgbox-js` 官網。
+
+PowerShell 的指令如下：
+
+```
+$env:IMGBOX_COOKIE="_imgbox_session=XXXXXXX"
+```
+
+然後執行：
 
   ```
   node .\proc_od_img.js --input wordpress.html --output output.html --title "相簿名稱"
@@ -44,3 +54,4 @@ OneDrive 在 2023 年把內嵌圖片的連結改成比較像是 API 的形式（
   - 批次上傳到 imgbox 會建立相簿、但是每批都會建立一個相簿（同名）
   - 相簿內顯示的照片數量缺少很多，但是實際上圖檔都在（原因不明）
   - 整批上傳的參數都會完全一樣、不能個別調整
+- 不知道為什麼，程式已經完成了卻不會結束
