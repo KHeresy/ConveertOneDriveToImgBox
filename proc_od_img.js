@@ -162,6 +162,7 @@ const failedHrefs = [];
     for (const { filename, imgTag } of tasksWithFiles) {
         const url = uploadedMap.get(filename.toLowerCase());
         if (url) {
+            imgTag.before(`<!-- backup: ${imgTag.attr('src')} -->`);
             imgTag.attr('src', url);
         } else {
             console.warn(`⚠️ 找不到上傳成功的對應網址：${filename}`);
