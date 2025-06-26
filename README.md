@@ -8,6 +8,10 @@ OneDrive 在 2023 年把內嵌圖片的連結改成比較像是 API 的形式（
 
 而和微軟客服連絡後，基本上完全沒有想要處理的打算，就直接說無法處理、要客戶自己重新弄。
 
+這部分可以參考：
+- [開始將部落格圖床轉移到 Imgbox](https://kheresy.wordpress.com/2025/06/08/convert-embed-image-from-onedrive-to-imgbox/)
+- [看來部落格被微軟搞得災情比想像的嚴重…](https://kheresy.wordpress.com/2025/06/24/onedrive-images-in-old-post/)
+
 所以後來決定放棄繼續把 OneDrive 當圖床、暫時先改用 https://imgbox.com/ 來做為新的圖床。
 
 而這個腳本，就是用來把現有的網頁做批次轉換用的；不過，大部分的程式都是 ChatGPT 寫的，這邊也只是調整到盡量可以正常運作而已。
