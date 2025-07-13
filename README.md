@@ -48,6 +48,22 @@ $env:IMGBOX_COOKIE="_imgbox_session=XXXXXXX"
    - 這邊沒有把分享連結替換掉，有需要請自己改
 5. 輸出修改過的 HTML
 
+## 可用參數
+
+- 共用參數
+  - `--user-data`: Puppeteer 的使用者資料路徑
+  - `--dir`: 下載圖片的資料夾（預設：`./downloads`）
+- 登入模式
+  - `--login`: 啟用 GUI 模式、讓使用者自行登入 OneDrive、資料會儲存於 `--user-data` 指定的路徑
+- 單檔模式
+  - `--url`: 單獨下載一個 OneDrive 連結
+- 網頁處理模式
+  - `--input`: 輸入的 HTML 檔案路徑（預設：`wordpress.html`）
+  - `--output`: 輸出的 HTML 檔案路徑（預設：`output.html`）
+  - `--title`: Imgbox 相簿標題（預設：`no-title`）
+  - `--resume_data`: 接續上次進度的檔案路徑（預設：`resume.json`）
+  - `--replace-link`: 將 `<a>` 標籤的 `href` 也替換成 Imgbox 的連結
+
 ## 已知問題
 
 - OneDrive 的部分
