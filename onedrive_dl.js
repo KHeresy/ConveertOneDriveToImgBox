@@ -92,7 +92,7 @@ class OneDrive {
                     const button = await page.$('#__photo-view-download');
                     await button.click();
                 } else if (url.startsWith('https://onedrive.live.com/?cid=')) {
-                    filename = await page.$eval('button[data-automationid="fileTitle"]', btn => btn.getAttribute('name'));
+                    filename = await page.$eval('button[data-automationid="fileTitle"]', btn => btn.getAttribute('title'));
                     const button = await page.$('button[data-automationid="download"]');
                     await button.click();
                 }
