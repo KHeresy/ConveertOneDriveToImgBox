@@ -7,7 +7,7 @@ const OneDrive = require('./onedrive_dl');
 
 const args = minimist(process.argv.slice(2), {
     string: ['input', 'output', 'dir', 'title', 'resume_data', 'url', 'user-data'],
-    boolean: ['login'],
+    boolean: ['login', 'replace-link'],
     default: {
         input: 'wordpress.html',
         output: 'output.html',
@@ -124,8 +124,7 @@ if (args.login) {
 
         try {
             for (const [index, { href, imgTag }] of allTasks.entries()) {
-                console.log(`
-🔄 處理第 ${index + 1} / ${total} 筆`);
+                console.log(`🔄 處理第 ${index + 1} / ${total} 筆`);
 
                 let filePath;
 
@@ -175,8 +174,7 @@ if (args.login) {
 
                 for (let i = 0; i < imagesForUpload.length; i += chunkSize) {
                     const chunk = imagesForUpload.slice(i, i + chunkSize);
-                    console.log(`
-🚀 上傳第 ${i / chunkSize + 1} 批，共 ${chunk.length} 張圖片至 imgbox...`);
+                    console.log(`🚀 上傳第 ${i / chunkSize + 1} 批，共 ${chunk.length} 張圖片至 imgbox...`);
 
                     const uploadRes = await imgbox(chunk, {
                         auth_cookie: imgboxAuthCookie,
@@ -191,7 +189,7 @@ if (args.login) {
 
                     if (uploadRes && uploadRes.data && Array.isArray(uploadRes.data.success)) {
                         for (const item of uploadRes.data.success) {
-                            uploadedMap.set(item.name.toLowerCase(), item.thumbnail_url);
+                            uploadedMap.set(item.name.toLowerCase(), { url: item.url, thumbnail_url: item.thumbnail_url });
                         }
                     }
 
@@ -203,10 +201,19 @@ if (args.login) {
 
                 let failMapping = false;
                 for (const { filename, imgTag } of tasksWithFiles) {
-                    const url = uploadedMap.get(filename.toLowerCase());
-                    if (url) {
-                        imgTag.before(`<!-- backup: ${imgTag.attr('src')} -->`);
-                        imgTag.attr('src', url);
+                    const urls = uploadedMap.get(filename.toLowerCase());
+                    if (urls) {
+                        const aTag = imgTag.parent();
+                        const originalSrc = imgTag.attr('src');
+
+                        if (args['replace-link']) {
+                            const originalHref = aTag.attr('href');
+                            imgTag.before(`<!-- backup: href="${originalHref}" src="${originalSrc}" -->`);
+                            aTag.attr('href', urls.url);
+                        } else {
+                            imgTag.before(`<!-- backup: src="${originalSrc}" -->`);
+                        }
+                        imgTag.attr('src', urls.thumbnail_url);
                     } else {
                         console.warn(`⚠️ 找不到上傳成功的對應網址：${filename}`);
                         failMapping = true;
@@ -223,9 +230,7 @@ if (args.login) {
             }
 
             fs.writeFileSync(args.output, $.html(), 'utf-8');
-            console.log(`
-✅ 已輸出修改後的 HTML 至：${args.output}`);
-
+            console.log(`✅ 已輸出修改後的 HTML 至：${args.output}`);
         } finally {
             await downloader.close();
         }
