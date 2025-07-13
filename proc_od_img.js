@@ -55,7 +55,7 @@ if (args.login) {
     (async () => {
         console.log(`單獨下載模式：${args.url}`);
         const downloader = new OneDrive();
-        await downloader.initialize({ ...downloaderOptions, headless: false });
+        await downloader.initialize({ ...downloaderOptions, headless: true });
         try {
             if (!fs.existsSync(downloadDir)) {
                 fs.mkdirSync(downloadDir, { recursive: true });
@@ -91,7 +91,7 @@ if (args.login) {
         const src = img.attr('src') || '';
         if (
             href &&
-            href.startsWith('https://1drv.ms/') &&
+            (href.startsWith('https://1drv.ms/') || href.startsWith('https://onedrive.live.com/?cid=')) &&
             img.length > 0 &&
             !src.includes('imgbox.com')
         ) {

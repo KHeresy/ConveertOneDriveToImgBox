@@ -38,7 +38,10 @@ $env:IMGBOX_COOKIE="_imgbox_session=XXXXXXX"
 
 1. 分析 HTML、把網頁中 `<a href="https://1drv.ms/XXXX" XXX><img XXXX></a>` 的連結都找出來
 2. 針對每一個找到的連結、透過 `onedrive_dl.js` 來下載
-   - 目前支援 `https://1drv.ms/u/s!XXX` 和 `https://1drv.ms/i/s!` 兩種形式的分享網址
+   - 目前支援 URL 類型
+     - `https://1drv.ms/u/s!XXX`
+     - `https://1drv.ms/i/s!XXX`
+     - `https://onedrive.live.com/?cid=XXX&id=XXX`： 可能需要登入
    - 內部實作是透過 `puppeteer` 去開一個瀏覽器、讓他真的去做網頁重新導向，最後再用模擬人類操作的方式去點下載連結
    - 會去比對 `resume.json`，裡面記錄了處理過的網址與對應的圖檔，這樣可以避免重新下載
 3. 圖檔都下載完後，透過 `imgbox-js` 批次上傳到 Imgbox
