@@ -6,7 +6,7 @@ const { imgbox } = require('imgbox-js');
 const OneDrive = require('./onedrive_dl');
 
 const args = minimist(process.argv.slice(2), {
-    string: ['input', 'output', 'dir', 'title', 'resume_data', 'url'], // Added 'url'
+    string: ['input', 'output', 'dir', 'title', 'resume_data', 'url', 'user-data'],
     default: {
         input: 'wordpress.html',
         output: 'output.html',
@@ -26,12 +26,21 @@ const od_options = {
 
 const downloadDir = path.resolve(args.img_dir);
 
+// --- Prepare OneDrive Downloader Options ---
+const downloaderOptions = {};
+if (args['user-data']) {
+    const userDataPath = path.resolve(args['user-data']);
+    // The user data directory is created automatically by Puppeteer if it doesn't exist.
+    downloaderOptions.userDataDir = userDataPath;
+    console.log(`💡 Using user data directory: ${downloaderOptions.userDataDir}`);
+}
+
 // --- New logic for single URL download ---
 if (args.url) {
     (async () => {
         console.log(`單獨下載模式：${args.url}`);
         const downloader = new OneDrive();
-        await downloader.initialize({ headless: true });
+        await downloader.initialize({ ...downloaderOptions, headless: false });
         try {
             if (!fs.existsSync(downloadDir)) {
                 fs.mkdirSync(downloadDir, { recursive: true });
@@ -96,7 +105,7 @@ if (args.url) {
 
     (async () => {
         const downloader = new OneDrive();
-        await downloader.initialize({ headless: true });
+        await downloader.initialize({ ...downloaderOptions, headless: true });
 
         try {
             for (const [index, { href, imgTag }] of allTasks.entries()) {
