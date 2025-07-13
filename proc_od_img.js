@@ -7,6 +7,7 @@ const OneDrive = require('./onedrive_dl');
 
 const args = minimist(process.argv.slice(2), {
     string: ['input', 'output', 'dir', 'title', 'resume_data', 'url', 'user-data'],
+    boolean: ['login'],
     default: {
         input: 'wordpress.html',
         output: 'output.html',
@@ -30,13 +31,27 @@ const downloadDir = path.resolve(args.img_dir);
 const downloaderOptions = {};
 if (args['user-data']) {
     const userDataPath = path.resolve(args['user-data']);
-    // The user data directory is created automatically by Puppeteer if it doesn't exist.
     downloaderOptions.userDataDir = userDataPath;
     console.log(`💡 Using user data directory: ${downloaderOptions.userDataDir}`);
 }
 
-// --- New logic for single URL download ---
-if (args.url) {
+// --- Login mode ---
+if (args.login) {
+    if (!downloaderOptions.userDataDir) {
+        console.error('❌ Error: --user-data is required for --login mode.');
+        process.exit(1);
+    }
+    (async () => {
+        const downloader = new OneDrive();
+        try {
+            await downloader.login(downloaderOptions);
+        } catch (error) {
+            console.error(`❌ Login process failed: ${error.message}`);
+            process.exit(1);
+        }
+    })();
+} else if (args.url) {
+    // --- Single URL download mode ---
     (async () => {
         console.log(`單獨下載模式：${args.url}`);
         const downloader = new OneDrive();
@@ -109,7 +124,8 @@ if (args.url) {
 
         try {
             for (const [index, { href, imgTag }] of allTasks.entries()) {
-                console.log(`\n🔄 處理第 ${index + 1} / ${total} 筆`);
+                console.log(`
+🔄 處理第 ${index + 1} / ${total} 筆`);
 
                 let filePath;
 
@@ -159,7 +175,8 @@ if (args.url) {
 
                 for (let i = 0; i < imagesForUpload.length; i += chunkSize) {
                     const chunk = imagesForUpload.slice(i, i + chunkSize);
-                    console.log(`\n🚀 上傳第 ${i / chunkSize + 1} 批，共 ${chunk.length} 張圖片至 imgbox...`);
+                    console.log(`
+🚀 上傳第 ${i / chunkSize + 1} 批，共 ${chunk.length} 張圖片至 imgbox...`);
 
                     const uploadRes = await imgbox(chunk, {
                         auth_cookie: imgboxAuthCookie,
@@ -206,7 +223,8 @@ if (args.url) {
             }
 
             fs.writeFileSync(args.output, $.html(), 'utf-8');
-            console.log(`\n✅ 已輸出修改後的 HTML 至：${args.output}`);
+            console.log(`
+✅ 已輸出修改後的 HTML 至：${args.output}`);
 
         } finally {
             await downloader.close();

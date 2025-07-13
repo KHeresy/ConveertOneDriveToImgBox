@@ -28,6 +28,29 @@ class OneDrive {
         });
     }
 
+    // New method to handle interactive login
+    async login(options = {}) {
+        const { userDataDir } = options;
+        if (!userDataDir) {
+            throw new Error('User data directory is required for login.');
+        }
+
+        // Initialize browser in headful mode
+        await this.initialize({ headless: false, userDataDir });
+
+        const page = await this.browser.newPage();
+        console.log('🚀 Navigating to OneDrive login page...');
+        await page.goto('https://onedrive.live.com/', { waitUntil: 'networkidle2' });
+
+        console.log('✅ Browser opened. Please log in to your OneDrive account.');
+        console.log('🔒 The script will terminate automatically when you close the browser window.');
+
+        // Wait for the browser to be closed by the user
+        await new Promise(resolve => this.browser.on('disconnected', resolve));
+        this.browser = null; // Nullify the browser instance
+        console.log('Browser closed by user. Login process complete.');
+    }
+
     // Download a single file from a URL
     async download(url, downloadPath = './downloads', options = {}) {
         if (!this.browser) {
