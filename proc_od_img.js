@@ -84,23 +84,65 @@ if (args.login) {
     const html = fs.readFileSync(args.input, 'utf-8');
     const $ = cheerio.load(html);
 
-    const allTasks = [];
+    const hrefToImgTags = new Map();
+    const srcToHref = new Map();
+
+    // First pass: build src -> href map from all valid <a> tags
     $('a').each((_, el) => {
         const href = $(el).attr('href');
         const img = $(el).find('img');
         const src = img.attr('src') || '';
-        if (
-            href &&
-            (href.startsWith('https://1drv.ms/') || href.startsWith('https://onedrive.live.com/?cid=')) &&
-            img.length > 0 &&
-            !src.includes('imgbox.com')
-        ) {
-            allTasks.push({ href, imgTag: $(img) });
+
+        if (href && (href.startsWith('https://1drv.ms/') || href.startsWith('https://onedrive.live.com/?cid=')) && src) {
+            const baseUrl = src.split('?')[0];
+            if (!srcToHref.has(baseUrl)) {
+                srcToHref.set(baseUrl, href);
+            }
         }
     });
 
+    // Second pass: iterate all images and group them by download href
+    $('img').each((_, el) => {
+        const imgTag = $(el);
+        const src = imgTag.attr('src') || '';
+
+        if (!src || src.includes('imgbox.com')) {
+            return; // Skip already processed or empty src images
+        }
+
+        const baseUrl = src.split('?')[0];
+        const parentA = imgTag.parent('a');
+        let href = '';
+
+        // Try to get href from parent <a> tag first
+        if (parentA.length > 0) {
+            const parentHref = parentA.attr('href');
+            if (parentHref && (parentHref.startsWith('https://1drv.ms/') || parentHref.startsWith('https://onedrive.live.com/?cid='))) {
+                href = parentHref;
+            }
+        }
+
+        // If no suitable parent <a>, try to find a link from the map
+        if (!href) {
+            href = srcToHref.get(baseUrl);
+        }
+
+        if (href) {
+            if (!hrefToImgTags.has(href)) {
+                hrefToImgTags.set(href, []);
+            }
+            hrefToImgTags.get(href).push(imgTag);
+        }
+    });
+
+    // Now, create the allTasks array from the map
+    const allTasks = [];
+    for (const [href, imgTags] of hrefToImgTags.entries()) {
+        allTasks.push({ href, imgTags });
+    }
+
     const total = allTasks.length;
-    console.log(`📦 共找到 ${total} 筆 OneDrive 圖片`);
+    console.log(`📦 共找到 ${total} 個獨立的 OneDrive 連結，對應多個圖片。`);
 
     const resumeFile = args.resume_data;
     let resumeMap = new Map();
@@ -123,8 +165,8 @@ if (args.login) {
         await downloader.initialize({ ...downloaderOptions, headless: true });
 
         try {
-            for (const [index, { href, imgTag }] of allTasks.entries()) {
-                console.log(`🔄 處理第 ${index + 1} / ${total} 筆`);
+            for (const [index, { href, imgTags }] of allTasks.entries()) {
+                console.log(`🔄 處理第 ${index + 1} / ${total} 個連結: ${href}`);
 
                 let filePath;
 
@@ -161,7 +203,9 @@ if (args.login) {
                 const fileNameNoExt = path.basename(filePath, path.extname(filePath));
 
                 imagesForUpload.push({ source: filePath, filename: fileNameNoExt });
-                tasksWithFiles.push({ filename: fileName, imgTag });
+                for (const imgTag of imgTags) {
+                    tasksWithFiles.push({ filename: fileName, imgTag });
+                }
             }
 
             const resumeArray = Array.from(resumeMap.entries()).map(([href, filename]) => ({ href, filename }));
