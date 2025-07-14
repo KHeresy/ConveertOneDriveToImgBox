@@ -84,6 +84,39 @@ if (args.login) {
     const html = fs.readFileSync(args.input, 'utf-8');
     const $ = cheerio.load(html);
 
+    // --- 從圖片 src 的 query string 設定長寬 ---
+    $('img').each((_, el) => {
+        const imgTag = $(el);
+        const src = imgTag.attr('src');
+
+        if (!src) return;
+
+        // 如果圖片標籤已經有 width 或 height 屬性，則跳過
+        if (imgTag.attr('width') || imgTag.attr('height')) {
+            return;
+        }
+
+        const qIndex = src.indexOf('?');
+        if (qIndex === -1) {
+            return;
+        }
+
+        try {
+            // 使用 URLSearchParams 安全地解析 query string
+            const params = new URLSearchParams(src.substring(qIndex));
+            const width = params.get('width');
+            const height = params.get('height');
+
+            if (width && height) {
+                console.log(`🎨 套用寬高 ${width}x${height} 至圖片: ${src.substring(0, 60)}...`);
+                imgTag.attr('width', width);
+                imgTag.attr('height', height);
+            }
+        } catch (e) {
+            console.warn(`⚠️ 無法解析圖片 src 的 query string: ${src}`);
+        }
+    });
+
     const hrefToImgTags = new Map();
     const srcToHref = new Map();
 
