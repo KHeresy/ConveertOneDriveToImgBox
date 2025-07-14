@@ -266,7 +266,9 @@ if (args.login) {
 
                     if (uploadRes && uploadRes.data && Array.isArray(uploadRes.data.success)) {
                         for (const item of uploadRes.data.success) {
-                            uploadedMap.set(item.name.toLowerCase(), { url: item.url, thumbnail_url: item.thumbnail_url });
+                            // 從 imgbox 回傳的檔名中移除副檔名，以進行比對
+                            const key = path.basename(item.name, path.extname(item.name));
+                            uploadedMap.set(key.toLowerCase(), { url: item.url, thumbnail_url: item.thumbnail_url });
                         }
                     }
 
@@ -278,7 +280,11 @@ if (args.login) {
 
                 let failMapping = false;
                 for (const { filename, imgTag } of tasksWithFiles) {
-                    const urls = uploadedMap.get(filename.toLowerCase());
+                    const filenameNoExt = path.basename(filename, path.extname(filename));
+                    // imgbox 正規化檔名：轉小寫、替換空格和括號為底線
+                    const normalizedFilename = filenameNoExt.toLowerCase().replace(/[\s()]/g, '_');
+                    const urls = uploadedMap.get(normalizedFilename);
+
                     if (urls) {
                         const aTag = imgTag.parent();
                         const originalSrc = imgTag.attr('src');
@@ -292,15 +298,15 @@ if (args.login) {
                         }
                         imgTag.attr('src', urls.thumbnail_url);
                     } else {
-                        console.warn(`⚠️ 找不到上傳成功的對應網址：${filename}`);
+                        console.warn(`⚠️ 找不到上傳成功的對應網址：${filename} (normalized: ${normalizedFilename})`);
                         failMapping = true;
                     }
                 }
 
                 if (failMapping) {
                     console.log("--- Uploaded URL Mapping ---");
-                    for (const [key, value] of uploadedMap) {
-                        console.log(`${key}: ${value}`);
+                    for (const [key, value] of uploadedMap.entries()) {
+                        console.log(`${key}: ${JSON.stringify(value)}`);
                     }
                     console.log("--------------------------");
                 }
