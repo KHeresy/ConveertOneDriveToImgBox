@@ -282,7 +282,7 @@ if (args.login) {
                 for (const { filename, imgTag } of tasksWithFiles) {
                     const filenameNoExt = path.basename(filename, path.extname(filename));
                     // imgbox 正規化檔名：轉小寫、替換空格和括號為底線
-                    const normalizedFilename = filenameNoExt.toLowerCase().replace(/[\s()]/g, '_');
+                    const normalizedFilename = filenameNoExt.toLowerCase().replace(/[\s\+()]/g, '_');
                     const urls = uploadedMap.get(normalizedFilename);
 
                     if (urls) {
