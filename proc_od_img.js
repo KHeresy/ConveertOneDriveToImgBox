@@ -15,7 +15,7 @@ const args = minimist(process.argv.slice(2), {
         title: 'no-title',
         upload_retries: 5,
         max_download_failures: 2,
-        resume_data: 'resume.json'
+        resume_data: 'cache.json'
     }
 });
 
@@ -182,7 +182,7 @@ if (args.login) {
     if (fs.existsSync(resumeFile)) {
         try {
             const resumeData = JSON.parse(fs.readFileSync(resumeFile, 'utf-8'));
-            resumeMap = new Map(resumeData.map(entry => [entry.href, entry.filename]));
+            resumeMap = new Map(resumeData.map(entry => [entry.href, {filename: entry.filename, imgbox_url: entry.imgbox_url, imgbox_thumbnail_url: entry.imgbox_thumbnail_url}]));
             console.log(`🔄 已載入 resume 檔案 (${resumeMap.size} 筆)`);
         } catch (err) {
             console.warn('⚠️ resume.json 解析失敗，將忽略。');
@@ -204,7 +204,25 @@ if (args.login) {
                 let filePath;
 
                 if (resumeMap.has(href)) {
-                    const existingFile = path.join(downloadDir, resumeMap.get(href));
+                    const cached = resumeMap.get(href);
+                    if (cached.imgbox_url && cached.imgbox_thumbnail_url) {
+                        console.log(`✅ 使用快取中的 imgbox 連結: ${cached.imgbox_thumbnail_url}`);
+                        for (const imgTag of imgTags) {
+                            const aTag = imgTag.parent();
+                            const originalSrc = imgTag.attr('src');
+                            if (args['replace-link']) {
+                                const originalHref = aTag.attr('href');
+                                imgTag.before(`<!-- backup: href="${originalHref}" src="${originalSrc}" -->`);
+                                aTag.attr('href', cached.imgbox_url);
+                            } else {
+                                imgTag.before(`<!-- backup: src="${originalSrc}" -->`);
+                            }
+                            imgTag.attr('src', cached.imgbox_thumbnail_url);
+                        }
+                        continue;
+                    }
+
+                    const existingFile = path.join(downloadDir, cached.filename);
                     if (fs.existsSync(existingFile)) {
                         filePath = existingFile;
                         console.log(`✅ 使用已存在檔案：${filePath}`);
@@ -215,8 +233,40 @@ if (args.login) {
 
                 if (!filePath) {
                     try {
-                        filePath = await downloader.download(href, downloadDir, od_options);
-                        resumeMap.set(href, path.basename(filePath));
+                        // 1. Create a temporary directory for download
+                        const tempDownloadDir = path.join(downloadDir, 'temp_download');
+                        if (fs.existsSync(tempDownloadDir)) {
+                            fs.rmSync(tempDownloadDir, { recursive: true, force: true });
+                        }
+                        fs.mkdirSync(tempDownloadDir, { recursive: true });
+
+                        // 2. Download the file into the temporary directory
+                        const tempFilePath = await downloader.download(href, tempDownloadDir, od_options);
+                        
+                        if (!tempFilePath || !fs.existsSync(tempFilePath)) {
+                             throw new Error('Download failed, temporary file not found.');
+                        }
+
+                        // 3. Determine the final path with conflict resolution
+                        const originalFilename = path.basename(tempFilePath);
+                        let finalFilePath = path.join(downloadDir, originalFilename);
+                        let counter = 1;
+                        const basename = path.basename(originalFilename, path.extname(originalFilename));
+                        const extname = path.extname(originalFilename);
+
+                        while (fs.existsSync(finalFilePath)) {
+                            finalFilePath = path.join(downloadDir, `${basename}_${counter}${extname}`);
+                            counter++;
+                        }
+
+                        // 4. Move the file to the final destination
+                        fs.renameSync(tempFilePath, finalFilePath);
+
+                        // 5. Clean up the temporary directory
+                        fs.rmSync(tempDownloadDir, { recursive: true, force: true });
+                        
+                        filePath = finalFilePath;
+                        resumeMap.set(href, {filename: path.basename(filePath)});
                         console.log(`✅ 下載完成：${filePath}`);
                     } catch (err) {
                         console.error(`❌ 下載失敗：${err.message || err}`);
@@ -241,9 +291,7 @@ if (args.login) {
                 }
             }
 
-            const resumeArray = Array.from(resumeMap.entries()).map(([href, filename]) => ({ href, filename }));
-            fs.writeFileSync(resumeFile, JSON.stringify(resumeArray, null, 2));
-            console.log(`📄 已更新 resume 資訊至 ${resumeFile}`);
+            
 
             if (imagesForUpload.length > 0) {
                 const uploadedMap = new Map();
@@ -266,9 +314,17 @@ if (args.login) {
 
                     if (uploadRes && uploadRes.data && Array.isArray(uploadRes.data.success)) {
                         for (const item of uploadRes.data.success) {
-                            // 從 imgbox 回傳的檔名中移除副檔名，以進行比對
                             const key = path.basename(item.name, path.extname(item.name));
                             uploadedMap.set(key.toLowerCase(), { url: item.url, thumbnail_url: item.thumbnail_url });
+
+                            for (const [href, cacheEntry] of resumeMap.entries()) {
+                                const cacheFilename = path.basename(cacheEntry.filename, path.extname(cacheEntry.filename));
+                                if (cacheFilename.toLowerCase() === key.toLowerCase()) {
+                                    cacheEntry.imgbox_url = item.url;
+                                    cacheEntry.imgbox_thumbnail_url = item.thumbnail_url;
+                                    break;
+                                }
+                            }
                         }
                     }
 
@@ -311,6 +367,10 @@ if (args.login) {
                     console.log("--------------------------");
                 }
             }
+
+            const finalResumeArray = Array.from(resumeMap.entries()).map(([href, data]) => ({ href, ...data }));
+            fs.writeFileSync(resumeFile, JSON.stringify(finalResumeArray, null, 2));
+            console.log(`📄 已將最終快取資訊儲存至 ${resumeFile}`);
 
             fs.writeFileSync(args.output, $.html(), 'utf-8');
             console.log(`✅ 已輸出修改後的 HTML 至：${args.output}`);
