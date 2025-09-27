@@ -182,7 +182,15 @@ if (args.login) {
     if (fs.existsSync(resumeFile)) {
         try {
             const resumeData = JSON.parse(fs.readFileSync(resumeFile, 'utf-8'));
-            resumeMap = new Map(resumeData.map(entry => [entry.href, {filename: entry.filename, imgbox_url: entry.imgbox_url, imgbox_thumbnail_url: entry.imgbox_thumbnail_url}]));
+            resumeMap = new Map(resumeData.map(entry => {
+                const isNested = typeof entry.filename === 'object' && entry.filename !== null;
+                const data = {
+                    filename: isNested ? entry.filename.filename : entry.filename,
+                    imgbox_url: isNested ? entry.filename.imgbox_url : entry.imgbox_url,
+                    imgbox_thumbnail_url: isNested ? entry.filename.imgbox_thumbnail_url : entry.imgbox_thumbnail_url,
+                };
+                return [entry.href, data];
+            }));
             console.log(`🔄 已載入 resume 檔案 (${resumeMap.size} 筆)`);
         } catch (err) {
             console.warn('⚠️ resume.json 解析失敗，將忽略。');
@@ -273,7 +281,7 @@ if (args.login) {
                         failedHrefs.push(href);
                         if (failedHrefs.length > args.max_download_failures) {
                             console.error(`🚨 下載失敗數超過上限 (${args.max_download_failures})，終止程序。`);
-                            const resumeArray = Array.from(resumeMap.entries()).map(([href, filename]) => ({ href, filename }));
+                            const resumeArray = Array.from(resumeMap.entries()).map(([href, data]) => ({ href, ...data }));
                             fs.writeFileSync(resumeFile, JSON.stringify(resumeArray, null, 2));
                             console.log(`📄 已儲存 resume 資訊至 ${resumeFile}`);
                             process.exit(1);
