@@ -126,7 +126,13 @@ if (args.login) {
         const img = $(el).find('img');
         const src = img.attr('src') || '';
 
-        if (href && (href.startsWith('https://1drv.ms/') || href.startsWith('https://onedrive.live.com/?cid=')) && src) {
+        const isValidHref = href && (
+            href.startsWith('https://1drv.ms/') || 
+            href.startsWith('https://onedrive.live.com/?cid=') ||
+            href.includes('photos.live.com')
+        );
+
+        if (isValidHref && src) {
             const baseUrl = src.split('?')[0];
             if (!srcToHref.has(baseUrl)) {
                 srcToHref.set(baseUrl, href);
@@ -150,7 +156,12 @@ if (args.login) {
         // Try to get href from parent <a> tag first
         if (parentA.length > 0) {
             const parentHref = parentA.attr('href');
-            if (parentHref && (parentHref.startsWith('https://1drv.ms/') || parentHref.startsWith('https://onedrive.live.com/?cid='))) {
+            const isValidParentHref = parentHref && (
+                parentHref.startsWith('https://1drv.ms/') || 
+                parentHref.startsWith('https://onedrive.live.com/?cid=') ||
+                parentHref.includes('photos.live.com')
+            );
+            if (isValidParentHref) {
                 href = parentHref;
             }
         }
