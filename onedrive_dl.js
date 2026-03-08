@@ -2,15 +2,28 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
-// Helper function to wait for a file to exist
-async function waitFileExists(filePath, timeoutMs = 15000) {
+// Helper function to wait for any file to appear in the directory
+async function waitAnyFile(downloadPath, timeoutMs = 30000) {
     const interval = 500;
     const maxTry = timeoutMs / interval;
     for (let i = 0; i < maxTry; i++) {
-        if (fs.existsSync(filePath)) return true;
+        if (!fs.existsSync(downloadPath)) {
+            await new Promise(resolve => setTimeout(resolve, interval));
+            continue;
+        }
+        const files = fs.readdirSync(downloadPath).filter(f => !f.endsWith('.crdownload') && !f.endsWith('.tmp'));
+        if (files.length > 0) {
+            // Sort by mtime to get the most recent one if there are multiple (though there should only be one)
+            const sortedFiles = files.map(f => ({
+                name: f,
+                time: fs.statSync(path.join(downloadPath, f)).mtime.getTime()
+            })).sort((a, b) => b.time - a.time);
+            
+            return path.join(downloadPath, sortedFiles[0].name);
+        }
         await new Promise(resolve => setTimeout(resolve, interval));
     }
-    return false;
+    return null;
 }
 
 class OneDrive {
@@ -21,14 +34,18 @@ class OneDrive {
     // Initialize the Puppeteer browser instance
     async initialize(options = {}) {
         const { headless = true, userDataDir = null } = options;
-        this.browser = await puppeteer.launch({
+        const launchOptions = {
             headless,
             defaultViewport: { width: 1920, height: 1080 },
-            userDataDir: userDataDir
-        });
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        };
+        if (userDataDir) {
+            launchOptions.userDataDir = userDataDir;
+        }
+        this.browser = await puppeteer.launch(launchOptions);
     }
 
-    // New method to handle interactive login
+    // Handle interactive login
     async login(options = {}) {
         const { userDataDir } = options;
         if (!userDataDir) {
@@ -59,7 +76,7 @@ class OneDrive {
 
         const {
             maxRetries = 1,
-            timeoutMs = 15000,
+            timeoutMs = 30000,
             retryDelayMs = 2000
         } = options;
 
@@ -79,53 +96,78 @@ class OneDrive {
                 });
 
                 console.log(`🚀 Attempting to download (try ${attempt + 1}): ${url}`);
-                await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+                await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
-                let filename = "";
-                if (url.startsWith('https://1drv.ms/u/s!')) {
-                    await page.waitForSelector('button[data-automationid="download"]', { timeout: 10000 });
-                    filename = await page.$eval('button[role="text"]', btn => btn.getAttribute('title'));
-                    await page.click('button[data-automationid="download"]');
-                } else if (url.startsWith('https://1drv.ms/i/')) {
-                    await page.waitForSelector('#__photo-view-download', { timeout: 10000 });
-                    const title = await page.title();
-                    filename = title.split(" - ")[0];
-                    const button = await page.$('#__photo-view-download');
-                    await button.click();
-                } else if (url.startsWith('https://onedrive.live.com/?cid=')) {
-                    await page.waitForSelector('button[data-automationid="download"]', { timeout: 10000 });
-                    filename = await page.$eval('button[data-automationid="fileTitle"]', btn => btn.getAttribute('title'));
-                    const button = await page.$('button[data-automationid="download"]');
-                    await button.click();
+                const finalUrl = page.url();
+                if (finalUrl !== url) {
+                    console.log(`📍 Final URL: ${finalUrl}`);
                 }
 
-                if (!filename) {
-                    throw new Error('Could not determine filename.');
+                // Wait for potential dynamic content
+                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                const selectors = [
+                    'button[data-automationid="download"]',
+                    'a[data-automationid="download"]',
+                    'button[name="Download"]',
+                    'button[title="Download"]',
+                    'button[aria-label="Download"]',
+                    '#__photo-view-download'
+                ];
+
+                let downloadButton = null;
+                for (const selector of selectors) {
+                    try {
+                        downloadButton = await page.waitForSelector(selector, { timeout: 5000 });
+                        if (downloadButton) {
+                            console.log(`🎯 Found download button with selector: ${selector}`);
+                            break;
+                        }
+                    } catch (e) {}
                 }
 
-                const filePath = path.join(downloadPath, filename);
-                const downloaded = await waitFileExists(filePath, timeoutMs);
-
-                if (!downloaded) {
-                    throw new Error(`Timeout waiting for file: ${filePath}`);
+                if (!downloadButton) {
+                    // Try by text (English and Chinese)
+                    const buttons = await page.$$('button, a');
+                    for (const btn of buttons) {
+                        const text = await page.evaluate(el => el.innerText, btn);
+                        if (text && (text.includes('Download') || text.includes('下載'))) {
+                            downloadButton = btn;
+                            console.log(`🎯 Found download button by text: "${text.trim()}"`);
+                            break;
+                        }
+                    }
                 }
-                
-                await new Promise(resolve => setTimeout(resolve, 500)); // Short delay to ensure file handle is released
-                console.log(`✅ Successfully downloaded: ${filePath}`);
+
+                if (!downloadButton) {
+                    // Check if we are on a login page
+                    const isLogin = await page.evaluate(() => document.body.innerText.includes('Sign in'));
+                    if (isLogin) {
+                        throw new Error('Authentication required. Please use --login mode first.');
+                    }
+                    throw new Error('Could not find download button.');
+                }
+
+                await downloadButton.click();
+                console.log('🖱️ Download button clicked.');
+
+                const filePath = await waitAnyFile(downloadPath, timeoutMs);
+                if (!filePath) {
+                    throw new Error(`Timeout waiting for download in: ${downloadPath}`);
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                console.log(`✅ Successfully downloaded: ${path.basename(filePath)}`);
                 return filePath;
 
             } catch (err) {
-                const isLast = attempt === maxRetries;
-                if (isLast) {
-                    throw new Error(`❌ All retries failed for ${url}. Last error: ${err.message}`);
-                } else {
-                    console.warn(`⚠️ Download attempt ${attempt + 1} failed. Retrying in ${retryDelayMs}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+                if (attempt === maxRetries) {
+                    throw err;
                 }
+                console.warn(`⚠️ Attempt ${attempt + 1} failed: ${err.message}. Retrying...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelayMs));
             } finally {
-                if (page) {
-                    await page.close();
-                }
+                if (page) await page.close();
             }
         }
     }

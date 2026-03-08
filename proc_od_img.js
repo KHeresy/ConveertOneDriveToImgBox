@@ -21,7 +21,7 @@ const args = minimist(process.argv.slice(2), {
 
 const od_options = {
     maxRetries: 2,
-    timeoutMs: 15000,
+    timeoutMs: 30000,
     retryDelayMs: 2000
 };
 
