@@ -57,6 +57,12 @@ class OneDrive {
     async download(url, downloadPath = './downloads', options = {}) {
         if (!this.browser) throw new Error('Browser not initialized.');
 
+        // 如果是 skydrive 網址，將其替換為 onedrive 並執行標準下載
+        if (url.includes('skydrive.live.com')) {
+            console.log(`🌐 偵測到舊式 SkyDrive 網址，已標準化為 OneDrive 網址。`);
+            url = url.replace('skydrive.live.com', 'onedrive.live.com');
+        }
+
         if (url.includes('photos.live.com')) {
             console.log(`📜 偵測到舊式 Windows Live Photos 網址，啟動救援模式...`);
             return this.downloadFromOldUrl(url, downloadPath, options);

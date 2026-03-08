@@ -129,6 +129,7 @@ if (args.login) {
         const isValidHref = href && (
             href.startsWith('https://1drv.ms/') || 
             href.startsWith('https://onedrive.live.com/?cid=') ||
+            href.includes('skydrive.live.com') ||
             href.includes('photos.live.com')
         );
 
@@ -159,6 +160,7 @@ if (args.login) {
             const isValidParentHref = parentHref && (
                 parentHref.startsWith('https://1drv.ms/') || 
                 parentHref.startsWith('https://onedrive.live.com/?cid=') ||
+                parentHref.includes('skydrive.live.com') ||
                 parentHref.includes('photos.live.com')
             );
             if (isValidParentHref) {
