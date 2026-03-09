@@ -103,7 +103,7 @@ class OneDrive {
     }
 
     async downloadFromOldUrl(url, downloadPath, options) {
-        const { timeoutMs = 60000 } = options;
+        const { timeoutMs = 60000, folderKeyword = null } = options;
         const cidMatch = url.match(/cid-([a-z0-9]+)/i);
         const cid = cidMatch ? cidMatch[1].toUpperCase() : null;
         if (!cid) throw new Error('無法從網址提取 CID');
@@ -112,7 +112,12 @@ class OneDrive {
         const decodedPath = decodeURIComponent(urlObj.pathname.replace('/self.aspx/', ''));
         const pathParts = decodedPath.split('/').filter(p => p);
         const fileName = pathParts.pop();
-        const folderName = pathParts.length > 0 ? pathParts[pathParts.length - 1] : null;
+        let folderName = pathParts.length > 0 ? pathParts[pathParts.length - 1] : null;
+
+        if (folderKeyword) {
+            console.log(`💡 使用提供的資料夾關鍵字複寫: ${folderKeyword}`);
+            folderName = folderKeyword;
+        }
 
         console.log(`🔍 解析資訊: CID=${cid}, 檔案=${fileName}, 資料夾關鍵字=${folderName}`);
 

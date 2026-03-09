@@ -6,8 +6,9 @@ const { imgbox } = require('imgbox-js');
 const OneDrive = require('./onedrive_dl');
 
 const args = minimist(process.argv.slice(2), {
-    string: ['input', 'output', 'dir', 'title', 'resume_data', 'url', 'user-data'],
-    boolean: ['login', 'replace-link'],
+    string: ['input', 'output', 'dir', 'title', 'resume_data', 'url', 'user-data', 'folder_keyword'],
+    boolean: ['login', 'replace-link', 'all_link', 'all_image'],
+    alias: { k: 'folder_keyword' },
     default: {
         input: 'wordpress.html',
         output: 'output.html',
@@ -19,10 +20,19 @@ const args = minimist(process.argv.slice(2), {
     }
 });
 
+function isOneDriveUrl(url) {
+    if (!url) return false;
+    return url.startsWith('https://1drv.ms/') || 
+           url.startsWith('https://onedrive.live.com/') ||
+           url.includes('skydrive.live.com') ||
+           url.includes('photos.live.com');
+}
+
 const od_options = {
     maxRetries: 2,
     timeoutMs: 30000,
-    retryDelayMs: 2000
+    retryDelayMs: 2000,
+    folderKeyword: args.folder_keyword
 };
 
 const downloadDir = path.resolve(args.img_dir);
@@ -118,25 +128,34 @@ if (args.login) {
     });
 
     const hrefToImgTags = new Map();
+    const hrefToATags = new Map();
     const srcToHref = new Map();
 
-    // First pass: build src -> href map from all valid <a> tags
+    // First pass: build src -> href map and handle --all_link
     $('a').each((_, el) => {
-        const href = $(el).attr('href');
-        const img = $(el).find('img');
+        const aTag = $(el);
+        const href = aTag.attr('href');
+        const img = aTag.find('img');
         const src = img.attr('src') || '';
 
-        const isValidHref = href && (
-            href.startsWith('https://1drv.ms/') || 
-            href.startsWith('https://onedrive.live.com/?cid=') ||
-            href.includes('skydrive.live.com') ||
-            href.includes('photos.live.com')
-        );
+        const isValidHref = isOneDriveUrl(href);
 
-        if (isValidHref && src) {
-            const baseUrl = src.split('?')[0];
-            if (!srcToHref.has(baseUrl)) {
-                srcToHref.set(baseUrl, href);
+        if (isValidHref) {
+            if (!hrefToATags.has(href)) {
+                hrefToATags.set(href, []);
+            }
+            hrefToATags.get(href).push(aTag);
+
+            if (src) {
+                const baseUrl = src.split('?')[0];
+                if (!srcToHref.has(baseUrl)) {
+                    srcToHref.set(baseUrl, href);
+                }
+            }
+
+            // If --all_link, ensure the link is tracked even without images
+            if (args.all_link && !hrefToImgTags.has(href)) {
+                hrefToImgTags.set(href, []);
             }
         }
     });
@@ -157,13 +176,7 @@ if (args.login) {
         // Try to get href from parent <a> tag first
         if (parentA.length > 0) {
             const parentHref = parentA.attr('href');
-            const isValidParentHref = parentHref && (
-                parentHref.startsWith('https://1drv.ms/') || 
-                parentHref.startsWith('https://onedrive.live.com/?cid=') ||
-                parentHref.includes('skydrive.live.com') ||
-                parentHref.includes('photos.live.com')
-            );
-            if (isValidParentHref) {
+            if (isOneDriveUrl(parentHref)) {
                 href = parentHref;
             }
         }
@@ -171,6 +184,13 @@ if (args.login) {
         // If no suitable parent <a>, try to find a link from the map
         if (!href) {
             href = srcToHref.get(baseUrl);
+        }
+
+        // If --all_image, fallback to src if it looks like a OneDrive link
+        if (!href && args.all_image) {
+            if (isOneDriveUrl(src)) {
+                href = src;
+            }
         }
 
         if (href) {
@@ -184,11 +204,12 @@ if (args.login) {
     // Now, create the allTasks array from the map
     const allTasks = [];
     for (const [href, imgTags] of hrefToImgTags.entries()) {
-        allTasks.push({ href, imgTags });
+        const aTags = hrefToATags.get(href) || [];
+        allTasks.push({ href, imgTags, aTags });
     }
 
     const total = allTasks.length;
-    console.log(`📦 共找到 ${total} 個獨立的 OneDrive 連結，對應多個圖片。`);
+    console.log(`📦 共找到 ${total} 個獨立的 OneDrive 連結，對應多個圖片與連結標籤。`);
 
     const resumeFile = args.resume_data;
     let resumeMap = new Map();
@@ -219,7 +240,7 @@ if (args.login) {
         await downloader.initialize({ ...downloaderOptions, headless: true });
 
         try {
-            for (const [index, { href, imgTags }] of allTasks.entries()) {
+            for (const [index, { href, imgTags, aTags }] of allTasks.entries()) {
                 console.log(`🔄 處理第 ${index + 1} / ${total} 個連結: ${href}`);
 
                 let filePath;
@@ -228,16 +249,18 @@ if (args.login) {
                     const cached = resumeMap.get(href);
                     if (cached.imgbox_url && cached.imgbox_thumbnail_url) {
                         console.log(`✅ 使用快取中的 imgbox 連結: ${cached.imgbox_thumbnail_url}`);
-                        for (const imgTag of imgTags) {
-                            const aTag = imgTag.parent();
-                            const originalSrc = imgTag.attr('src');
-                            if (args['replace-link']) {
-                                const originalHref = aTag.attr('href');
-                                imgTag.before(`<!-- backup: href="${originalHref}" src="${originalSrc}" -->`);
+                        
+                        // Handle <a> tags update
+                        if (args['replace-link']) {
+                            for (const aTag of aTags) {
                                 aTag.attr('href', cached.imgbox_url);
-                            } else {
-                                imgTag.before(`<!-- backup: src="${originalSrc}" -->`);
                             }
+                        }
+
+                        // Handle <img> tags update
+                        for (const imgTag of imgTags) {
+                            const originalSrc = imgTag.attr('src');
+                            imgTag.before(`<!-- backup: src="${originalSrc}" -->`);
                             imgTag.attr('src', cached.imgbox_thumbnail_url);
                         }
                         continue;
@@ -307,9 +330,9 @@ if (args.login) {
                 const fileNameNoExt = path.basename(filePath, path.extname(filePath));
 
                 imagesForUpload.push({ source: filePath, filename: fileNameNoExt });
-                for (const imgTag of imgTags) {
-                    tasksWithFiles.push({ filename: fileName, imgTag });
-                }
+                
+                // Keep track of which tags to update for this file
+                tasksWithFiles.push({ filename: fileName, imgTags, aTags });
             }
 
             
@@ -356,24 +379,26 @@ if (args.login) {
                 }
 
                 let failMapping = false;
-                for (const { filename, imgTag } of tasksWithFiles) {
+                for (const { filename, imgTags, aTags } of tasksWithFiles) {
                     const filenameNoExt = path.basename(filename, path.extname(filename));
                     // imgbox 正規化檔名：轉小寫、替換空格和括號為底線
                     const normalizedFilename = filenameNoExt.toLowerCase().replace(/[\s\+()]/g, '_');
                     const urls = uploadedMap.get(normalizedFilename);
 
                     if (urls) {
-                        const aTag = imgTag.parent();
-                        const originalSrc = imgTag.attr('src');
-
+                        // Update <a> tags
                         if (args['replace-link']) {
-                            const originalHref = aTag.attr('href');
-                            imgTag.before(`<!-- backup: href="${originalHref}" src="${originalSrc}" -->`);
-                            aTag.attr('href', urls.url);
-                        } else {
-                            imgTag.before(`<!-- backup: src="${originalSrc}" -->`);
+                            for (const aTag of aTags) {
+                                aTag.attr('href', urls.url);
+                            }
                         }
-                        imgTag.attr('src', urls.thumbnail_url);
+
+                        // Update <img> tags
+                        for (const imgTag of imgTags) {
+                            const originalSrc = imgTag.attr('src');
+                            imgTag.before(`<!-- backup: src="${originalSrc}" -->`);
+                            imgTag.attr('src', urls.thumbnail_url);
+                        }
                     } else {
                         console.warn(`⚠️ 找不到上傳成功的對應網址：${filename} (normalized: ${normalizedFilename})`);
                         failMapping = true;
